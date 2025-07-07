@@ -29,6 +29,7 @@ const Home = () => {
 
   const token = getToken();
   const user = decodeToken(token);
+  const userId = user?.userId;
 
   // Build query params from filters
   const buildParams = () => {
@@ -85,6 +86,37 @@ const Home = () => {
     setFilters({ location: '', visibility: '', dateFrom: '', dateTo: '' });
   };
 
+  // AttendanceStatus options
+  const attendanceOptions = [
+    { value: 'GOING', label: 'Going', className: styles.going },
+    { value: 'MAYBE', label: 'Maybe', className: styles.maybe },
+    { value: 'DECLINED', label: 'Declined', className: styles.declined },
+  ];
+
+  // Track RSVP status per event
+  const [attendance, setAttendance] = useState({}); // { [eventId]: 'GOING' | 'MAYBE' | 'DECLINED' }
+  const [attLoading, setAttLoading] = useState({}); // { [eventId]: boolean }
+  const [attMsg, setAttMsg] = useState({}); // { [eventId]: string }
+  const [attError, setAttError] = useState({}); // { [eventId]: string }
+
+  const handleAttendance = async (eventId, status) => {
+    setAttLoading(a => ({ ...a, [eventId]: true }));
+    setAttError(e => ({ ...e, [eventId]: '' }));
+    setAttMsg(m => ({ ...m, [eventId]: '' }));
+    try {
+      await api.post(`/events/${eventId}/attendance`, {
+        userId,
+        status,
+      });
+      setAttendance(a => ({ ...a, [eventId]: status }));
+      setAttMsg(m => ({ ...m, [eventId]: 'Attendance updated!' }));
+    } catch (err) {
+      setAttError(e => ({ ...e, [eventId]: 'Failed to update attendance.' }));
+    } finally {
+      setAttLoading(a => ({ ...a, [eventId]: false }));
+    }
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -92,6 +124,7 @@ const Home = () => {
           Welcome <b>{user?.sub || user?.email || 'User'}</b>
         </div>
         <div style={{ display: 'flex', gap: '0.7rem' }}>
+          <button className={styles.logout} onClick={() => navigate('/create')} style={{ background: '#22c55e' }}>Create Event</button>
           <button className={styles.logout} onClick={handleProfile} style={{ background: '#4f46e5' }}>Profile</button>
           <button className={styles.logout} onClick={handleLogout}>Logout</button>
         </div>
@@ -204,6 +237,30 @@ const Home = () => {
                 {formatDate(event.startTime)} — {formatDate(event.endTime)}
               </div>
               <div className={styles.description}>{event.description}</div>
+              {/* Attendance UI */}
+              <div className={styles.attendanceBar}>
+                <span style={{ fontWeight: 500, color: '#6366f1', marginRight: 6 }}>Your RSVP:</span>
+                {attendanceOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    className={
+                      [styles.attendanceBtn, styles[opt.value.toLowerCase()], attendance[event.id] === opt.value ? styles.selected : '']
+                        .filter(Boolean).join(' ')
+                    }
+                    disabled={attLoading[event.id]}
+                    onClick={() => handleAttendance(event.id, opt.value)}
+                    type="button"
+                    aria-pressed={attendance[event.id] === opt.value}
+                  >
+                    {opt.label}
+                    {attendance[event.id] === opt.value && ' ✓'}
+                  </button>
+                ))}
+                {attLoading[event.id] && <span className="spinner" style={{ width: 18, height: 18, border: '2.5px solid #6366f1', borderTop: '2.5px solid #fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite', marginLeft: 6 }} />}
+                {attMsg[event.id] && <span className={styles.attendanceMsg}>{attMsg[event.id]}</span>}
+                {attError[event.id] && <span className={styles.attendanceError}>{attError[event.id]}</span>}
+              </div>
+              <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
             </div>
           ))}
         </div>
