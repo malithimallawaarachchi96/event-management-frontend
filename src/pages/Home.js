@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/axios';
-import { getToken, logout, decodeToken } from '../auth/authUtils';
+import { useAppDispatch, useEvents, useAuth, useFilteredEvents } from '../app/hooks';
+import { fetchEvents, deleteEvent, markAttendance, setFilters, clearFilters, clearError } from '../features/events/eventSlice';
+import { logoutUser } from '../features/auth/authSlice';
 import styles from './Home.module.css';
 
 const formatDate = (iso) => {
@@ -15,62 +16,36 @@ const SkeletonCard = () => (
 );
 
 const Home = () => {
-  const [events, setEvents] = useState([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    location: '',
-    visibility: '',
-    dateFrom: '',
-    dateTo: '',
-  });
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = React.useState(true);
   const navigate = useNavigate();
-
-  // Get user id from JWT
-  const token = getToken();
-  const user = decodeToken(token);
+  const dispatch = useAppDispatch();
+  
+  // Get state from Redux
+  const { user, isAuthenticated } = useAuth();
+  const { loading, error, filters } = useEvents();
+  const events = useFilteredEvents();
+  
+  // Clear error when component unmounts
+  useEffect(() => {
+    return () => {
+      if (error) {
+        dispatch(clearError());
+      }
+    };
+  }, [dispatch, error]);
+  
   const userId = user?.userId;
 
-  // Build query params from filters
-  const buildParams = () => {
-    const params = {};
-    if (filters.location) params.location = filters.location;
-    if (filters.visibility) params.visibility = filters.visibility;
-    if (filters.dateFrom) params.dateFrom = filters.dateFrom;
-    if (filters.dateTo) params.dateTo = filters.dateTo;
-    return params;
-  };
-
-  const fetchEvents = () => {
-    setLoading(true);
-    setError('');
-    api.get('/events/', { params: buildParams() })
-      .then(res => {
-        setEvents(res.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-          handleLogout();
-        } else {
-          setError('Failed to fetch events.');
-          setLoading(false);
-        }
-      });
-  };
-
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated) {
       handleLogout();
       return;
     }
-    fetchEvents();
-    // eslint-disable-next-line
-  }, [filters]);
+    dispatch(fetchEvents());
+  }, [dispatch, isAuthenticated]);
 
   const handleLogout = () => {
-    logout();
+    dispatch(logoutUser());
     navigate('/');
   };
 
@@ -80,11 +55,11 @@ const Home = () => {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters(f => ({ ...f, [name]: value }));
+    dispatch(setFilters({ [name]: value }));
   };
 
   const handleClearFilters = () => {
-    setFilters({ location: '', visibility: '', dateFrom: '', dateTo: '' });
+    dispatch(clearFilters());
   };
 
   // AttendanceStatus options
@@ -94,45 +69,15 @@ const Home = () => {
     { value: 'DECLINED', label: 'Declined', className: styles.declined },
   ];
 
-  // Track RSVP status per event
-  const [attendance, setAttendance] = useState({}); // { [eventId]: 'GOING' | 'MAYBE' | 'DECLINED' }
-  const [attLoading, setAttLoading] = useState({}); // { [eventId]: boolean }
-  const [attMsg, setAttMsg] = useState({}); // { [eventId]: string }
-  const [attError, setAttError] = useState({}); // { [eventId]: string }
-  const [deleteLoading, setDeleteLoading] = useState({}); // { [eventId]: boolean }
-
   const handleAttendance = async (eventId, status) => {
-    setAttLoading(a => ({ ...a, [eventId]: true }));
-    setAttError(e => ({ ...e, [eventId]: '' }));
-    setAttMsg(m => ({ ...m, [eventId]: '' }));
-    try {
-      await api.post(`/events/${eventId}/attendance`, {
-        userId,
-        status,
-      });
-      setAttendance(a => ({ ...a, [eventId]: status }));
-      setAttMsg(m => ({ ...m, [eventId]: 'Attendance updated!' }));
-    } catch (err) {
-      setAttError(e => ({ ...e, [eventId]: 'Failed to update attendance.' }));
-    } finally {
-      setAttLoading(a => ({ ...a, [eventId]: false }));
-    }
+    dispatch(markAttendance({ eventId, status }));
   };
 
   const handleDeleteEvent = async (eventId) => {
     if (!window.confirm('Are you sure you want to delete this event?')) {
       return;
     }
-    setDeleteLoading(d => ({ ...d, [eventId]: true }));
-    try {
-      await api.delete(`/events/${eventId}`);
-      // Remove the event from the list
-      setEvents(events.filter(e => e.id !== eventId));
-    } catch (err) {
-      alert('Failed to delete event. Please try again.');
-    } finally {
-      setDeleteLoading(d => ({ ...d, [eventId]: false }));
-    }
+    dispatch(deleteEvent(eventId));
   };
 
   return (
@@ -159,7 +104,7 @@ const Home = () => {
         <form
           className={styles.filterBar}
           id="filterBar"
-          onSubmit={e => { e.preventDefault(); fetchEvents(); }}
+          onSubmit={e => { e.preventDefault(); dispatch(fetchEvents()); }}
         >
           <div className={styles.filterGroup}>
             <label className={styles.filterLabel} htmlFor="location">Location</label>
@@ -195,7 +140,7 @@ const Home = () => {
               type="date"
               id="dateFrom"
               name="dateFrom"
-              value={filters.dateFrom}
+              value={filters.startDate}
               onChange={handleFilterChange}
             />
           </div>
@@ -206,7 +151,7 @@ const Home = () => {
               type="date"
               id="dateTo"
               name="dateTo"
-              value={filters.dateTo}
+              value={filters.endDate}
               onChange={handleFilterChange}
             />
           </div>
@@ -262,7 +207,6 @@ const Home = () => {
                     e.stopPropagation();
                     handleDeleteEvent(event.id);
                   }}
-                  disabled={deleteLoading[event.id]}
                   style={{
                     background: '#ef4444',
                     color: 'white',
@@ -272,10 +216,9 @@ const Home = () => {
                     fontSize: '0.9rem',
                     cursor: 'pointer',
                     marginTop: '0.5rem',
-                    opacity: deleteLoading[event.id] ? 0.7 : 1,
                   }}
                 >
-                  {deleteLoading[event.id] ? 'Deleting...' : 'Delete Event'}
+                  Delete Event
                 </button>
               )}
               {/* Attendance UI */}
@@ -284,22 +227,19 @@ const Home = () => {
                 {attendanceOptions.map(opt => (
                   <button
                     key={opt.value}
-                    className={
-                      [styles.attendanceBtn, styles[opt.value.toLowerCase()], attendance[event.id] === opt.value ? styles.selected : '']
-                        .filter(Boolean).join(' ')
-                    }
-                    disabled={attLoading[event.id]}
+                    className={[
+                      styles.attendanceBtn,
+                      styles[opt.value.toLowerCase()],
+                      event.attendance === opt.value ? styles.selected : ''
+                    ].filter(Boolean).join(' ')}
                     onClick={() => handleAttendance(event.id, opt.value)}
                     type="button"
-                    aria-pressed={attendance[event.id] === opt.value}
+                    aria-pressed={event.attendance === opt.value}
                   >
                     {opt.label}
-                    {attendance[event.id] === opt.value && ' ✓'}
+                    {event.attendance === opt.value && ' ✓'}
                   </button>
                 ))}
-                {attLoading[event.id] && <span className="spinner" style={{ width: 18, height: 18, border: '2.5px solid #6366f1', borderTop: '2.5px solid #fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite', marginLeft: 6 }} />}
-                {attMsg[event.id] && <span className={styles.attendanceMsg}>{attMsg[event.id]}</span>}
-                {attError[event.id] && <span className={styles.attendanceError}>{attError[event.id]}</span>}
               </div>
               <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
             </div>

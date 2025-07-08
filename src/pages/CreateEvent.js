@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/axios';
+import { useAppDispatch } from '../app/hooks';
+import { useAuth } from '../app/hooks';
+import { createEvent } from '../features/events/eventSlice';
 import styles from './CreateEvent.module.css';
-import { decodeToken, getToken } from '../auth/authUtils';
 
 const initialState = {
   title: '',
@@ -16,14 +17,12 @@ const initialState = {
 const CreateEvent = () => {
   const [form, setForm] = useState(initialState);
   const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
-  const [apiError, setApiError] = useState('');
   const navigate = useNavigate();
-
-  // Get user id from JWT
-  const token = getToken();
-  const user = decodeToken(token);
+  const dispatch = useAppDispatch();
+  
+  // Get user from Redux
+  const { user } = useAuth();
   const userId = user?.userId;
 
   const validate = () => {
@@ -45,31 +44,24 @@ const CreateEvent = () => {
     const { name, value } = e.target;
     setForm(f => ({ ...f, [name]: value }));
     setErrors(errs => ({ ...errs, [name]: undefined }));
-    setApiError('');
     setSuccess('');
   };
 
   const handleSubmit = async e => {
     e.preventDefault();
-    setApiError('');
     setSuccess('');
     if (!validate()) return;
-    setLoading(true);
-    try {
-      await api.post('/events/', {
-        ...form,
-        visibility: form.visibility,
-        hostId: userId,
-      });
+    
+    const result = await dispatch(createEvent({
+      ...form,
+      visibility: form.visibility,
+      hostId: userId,
+    }));
+    
+    if (createEvent.fulfilled.match(result)) {
       setSuccess('Event created successfully!');
       setForm(initialState);
       setTimeout(() => navigate('/home'), 1200);
-    } catch (err) {
-      setApiError(
-        err.response?.data?.message || 'Failed to create event. Please try again.'
-      );
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -89,7 +81,6 @@ const CreateEvent = () => {
               value={form.title}
               onChange={handleChange}
               placeholder=" "
-              disabled={loading}
               required
             />
             <label htmlFor="title" className={styles.label}>Title</label>
@@ -103,7 +94,6 @@ const CreateEvent = () => {
               value={form.description}
               onChange={handleChange}
               placeholder=" "
-              disabled={loading}
               required
             />
             <label htmlFor="description" className={styles.label}>Description</label>
@@ -118,7 +108,6 @@ const CreateEvent = () => {
               value={form.location}
               onChange={handleChange}
               placeholder=" "
-              disabled={loading}
               required
             />
             <label htmlFor="location" className={styles.label}>Location</label>
@@ -131,7 +120,6 @@ const CreateEvent = () => {
               id="visibility"
               value={form.visibility}
               onChange={handleChange}
-              disabled={loading}
               required
             >
               <option value="" disabled hidden></option>
@@ -149,7 +137,6 @@ const CreateEvent = () => {
               id="startTime"
               value={form.startTime}
               onChange={handleChange}
-              disabled={loading}
               required
             />
             <label htmlFor="startTime" className={styles.label}>Start Time</label>
@@ -163,7 +150,6 @@ const CreateEvent = () => {
               id="endTime"
               value={form.endTime}
               onChange={handleChange}
-              disabled={loading}
               required
             />
             <label htmlFor="endTime" className={styles.label}>End Time</label>
@@ -172,16 +158,9 @@ const CreateEvent = () => {
           <button
             className={styles.button}
             type="submit"
-            disabled={loading}
           >
-            {loading ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <span className="spinner" style={{ width: 18, height: 18, border: '2.5px solid #fff', borderTop: '2.5px solid #6366f1', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
-                Creating...
-              </span>
-            ) : 'Create Event'}
+            Create Event
           </button>
-          {apiError && <div className={styles.error} style={{ textAlign: 'center', marginTop: 2 }}>{apiError}</div>}
           {success && <div className={styles.success}>{success}</div>}
         </form>
         <style>{`

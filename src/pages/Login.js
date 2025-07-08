@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/axios';
-import { setToken } from '../auth/authUtils';
+import { useAppDispatch, useAuth } from '../app/hooks';
+import { loginUser, clearError } from '../features/auth/authSlice';
 import styles from './Login.module.css';
 import logo from '../logo.svg';
 
@@ -11,11 +11,19 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  
+  // Get auth state from Redux
+  const { loading, error, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/home');
+    }
+  }, [isAuthenticated, navigate]);
 
   const validate = () => {
     let valid = true;
@@ -37,17 +45,11 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     if (!validate()) return;
-    setLoading(true);
-    try {
-      const response = await api.post('/auth/login', { email, password });
-      setToken(response.data.token);
-      navigate('/home');
-    } catch (err) {
-      setError('Invalid email or password');
-    } finally {
-      setLoading(false);
+    
+    const result = await dispatch(loginUser({ email, password }));
+    if (loginUser.fulfilled.match(result)) {
+      // The navigation to /home is now handled by useEffect
     }
   };
 

@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import api from '../api/axios';
-import styles from './UserProfile.module.css';
-import { getToken, decodeToken } from '../auth/authUtils';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAppDispatch } from '../app/hooks';
+import { useAuth, useUser } from '../app/hooks';
+import { deleteEvent } from '../features/events/eventSlice';
+import { fetchUserProfile, fetchUserEvents } from '../features/user/userSlice';
+import styles from './UserProfile.module.css';
 
 const formatDate = (iso) => {
   if (!iso) return '';
@@ -12,7 +14,7 @@ const formatDate = (iso) => {
 
 const SkeletonCard = () => <div className={styles.skeleton} />;
 
-const EventCard = ({ event, onDelete, deleteLoading, userId }) => (
+const EventCard = ({ event, onDelete, userId }) => (
   <div className={styles.eventCard} tabIndex={0}>
     <span className={
       event.visibility === 'PUBLIC'
@@ -31,7 +33,6 @@ const EventCard = ({ event, onDelete, deleteLoading, userId }) => (
           e.stopPropagation();
           onDelete(event.id);
         }}
-        disabled={deleteLoading[event.id]}
         style={{
           background: '#ef4444',
           color: 'white',
@@ -41,83 +42,45 @@ const EventCard = ({ event, onDelete, deleteLoading, userId }) => (
           fontSize: '0.9rem',
           cursor: 'pointer',
           marginTop: '0.5rem',
-          opacity: deleteLoading[event.id] ? 0.7 : 1,
         }}
       >
-        {deleteLoading[event.id] ? 'Deleting...' : 'Delete Event'}
+        Delete Event
       </button>
     )}
   </div>
 );
 
 const UserProfile = () => {
-  const [user, setUser] = useState(null);
-  const [hosted, setHosted] = useState([]);
-  const [attending, setAttending] = useState([]);
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [loadingEvents, setLoadingEvents] = useState(true);
-  const [error, setError] = useState('');
-  const [deleteLoading, setDeleteLoading] = useState({}); // { [eventId]: boolean }
   const navigate = useNavigate();
-
-  const token = getToken();
-  const jwtUser = decodeToken(token);
-  const userId = jwtUser?.userId;
+  const dispatch = useAppDispatch();
+  
+  // Get state from Redux
+  const { isAuthenticated } = useAuth();
+  const { profile: user, hostedEvents: hosted, attendingEvents: attending, loading, error } = useUser();
+  
+  const userId = user?.userId;
 
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated) {
       navigate('/');
       return;
     }
-    setLoadingUser(true);
-    setError('');
-    api.get('/users/me')
-      .then(res => {
-        setUser(res.data);
-        setLoadingUser(false);
-      })
-      .catch(() => {
-        setError('Failed to load user info.');
-        setLoadingUser(false);
-      });
-    setLoadingEvents(true);
-    api.get('/users/me/events')
-      .then(res => {
-        // Handle { hosted: [], attending: [] } structure
-        const data = res.data || {};
-        setHosted(Array.isArray(data.hosted) ? data.hosted : []);
-        setAttending(Array.isArray(data.attending) ? data.attending : []);
-        setLoadingEvents(false);
-      })
-      .catch(() => {
-        setError('Failed to load your events.');
-        setLoadingEvents(false);
-      });
-    // eslint-disable-next-line
-  }, []);
+    dispatch(fetchUserProfile());
+    dispatch(fetchUserEvents());
+  }, [dispatch, isAuthenticated, navigate]);
 
   const handleDeleteEvent = async (eventId) => {
     if (!window.confirm('Are you sure you want to delete this event?')) {
       return;
     }
-    setDeleteLoading(d => ({ ...d, [eventId]: true }));
-    try {
-      await api.delete(`/events/${eventId}`);
-      // Remove the event from both hosted and attending lists
-      setHosted(hosted.filter(e => e.id !== eventId));
-      setAttending(attending.filter(e => e.id !== eventId));
-    } catch (err) {
-      alert('Failed to delete event. Please try again.');
-    } finally {
-      setDeleteLoading(d => ({ ...d, [eventId]: false }));
-    }
+    dispatch(deleteEvent(eventId));
   };
 
   return (
     <div className={styles.container}>
       <div className={styles.profileCard}>
         <div className={styles.profileTitle}>User Profile</div>
-        {loadingUser ? (
+        {loading ? (
           <SkeletonCard />
         ) : user ? (
           <>
@@ -134,7 +97,7 @@ const UserProfile = () => {
       </div>
       <div className={styles.section}>
         <div className={styles.sectionTitle}>Events You're Hosting</div>
-        {loadingEvents ? (
+        {loading ? (
           <div className={styles.eventGrid}>
             {[...Array(2)].map((_, i) => <SkeletonCard key={i} />)}
           </div>
@@ -147,7 +110,6 @@ const UserProfile = () => {
                 event={event} 
                 key={event.id} 
                 onDelete={handleDeleteEvent}
-                deleteLoading={deleteLoading}
                 userId={userId}
               />
             ))}
@@ -156,7 +118,7 @@ const UserProfile = () => {
       </div>
       <div className={styles.section}>
         <div className={styles.sectionTitle}>Events You're Attending</div>
-        {loadingEvents ? (
+        {loading ? (
           <div className={styles.eventGrid}>
             {[...Array(2)].map((_, i) => <SkeletonCard key={i} />)}
           </div>
@@ -169,7 +131,6 @@ const UserProfile = () => {
                 event={event} 
                 key={event.id} 
                 onDelete={handleDeleteEvent}
-                deleteLoading={deleteLoading}
                 userId={userId}
               />
             ))}
