@@ -12,7 +12,7 @@ const formatDate = (iso) => {
 
 const SkeletonCard = () => <div className={styles.skeleton} />;
 
-const EventCard = ({ event }) => (
+const EventCard = ({ event, onDelete, deleteLoading, userId }) => (
   <div className={styles.eventCard} tabIndex={0}>
     <span className={
       event.visibility === 'PUBLIC'
@@ -24,6 +24,29 @@ const EventCard = ({ event }) => (
     <div className={styles.eventTitle}>{event.title}</div>
     <div className={styles.eventLocation}>{event.location}</div>
     <div className={styles.eventTime}>{formatDate(event.startTime)}</div>
+    {/* Delete button for events user is hosting */}
+    {event.hostId === userId && (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(event.id);
+        }}
+        disabled={deleteLoading[event.id]}
+        style={{
+          background: '#ef4444',
+          color: 'white',
+          border: 'none',
+          borderRadius: '0.5rem',
+          padding: '0.4rem 0.8rem',
+          fontSize: '0.9rem',
+          cursor: 'pointer',
+          marginTop: '0.5rem',
+          opacity: deleteLoading[event.id] ? 0.7 : 1,
+        }}
+      >
+        {deleteLoading[event.id] ? 'Deleting...' : 'Delete Event'}
+      </button>
+    )}
   </div>
 );
 
@@ -34,10 +57,12 @@ const UserProfile = () => {
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [error, setError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState({}); // { [eventId]: boolean }
   const navigate = useNavigate();
 
   const token = getToken();
   const jwtUser = decodeToken(token);
+  const userId = jwtUser?.userId;
 
   useEffect(() => {
     if (!token) {
@@ -71,6 +96,23 @@ const UserProfile = () => {
     // eslint-disable-next-line
   }, []);
 
+  const handleDeleteEvent = async (eventId) => {
+    if (!window.confirm('Are you sure you want to delete this event?')) {
+      return;
+    }
+    setDeleteLoading(d => ({ ...d, [eventId]: true }));
+    try {
+      await api.delete(`/events/${eventId}`);
+      // Remove the event from both hosted and attending lists
+      setHosted(hosted.filter(e => e.id !== eventId));
+      setAttending(attending.filter(e => e.id !== eventId));
+    } catch (err) {
+      alert('Failed to delete event. Please try again.');
+    } finally {
+      setDeleteLoading(d => ({ ...d, [eventId]: false }));
+    }
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.profileCard}>
@@ -100,7 +142,15 @@ const UserProfile = () => {
           <div className={styles.empty}>You are not hosting any events.</div>
         ) : (
           <div className={styles.eventGrid}>
-            {hosted.map(event => <EventCard event={event} key={event.id} />)}
+            {hosted.map(event => (
+              <EventCard 
+                event={event} 
+                key={event.id} 
+                onDelete={handleDeleteEvent}
+                deleteLoading={deleteLoading}
+                userId={userId}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -114,7 +164,15 @@ const UserProfile = () => {
           <div className={styles.empty}>You are not attending any events.</div>
         ) : (
           <div className={styles.eventGrid}>
-            {attending.map(event => <EventCard event={event} key={event.id} />)}
+            {attending.map(event => (
+              <EventCard 
+                event={event} 
+                key={event.id} 
+                onDelete={handleDeleteEvent}
+                deleteLoading={deleteLoading}
+                userId={userId}
+              />
+            ))}
           </div>
         )}
       </div>

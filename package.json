@@ -37,5 +37,17 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "jest": {
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(axios)/)"
+    ],
+    "moduleNameMapper": {
+      "\\.(css|less|scss|sass)$": "identity-obj-proxy",
+      "\\.(gif|ttf|eot|svg|png)$": "<rootDir>/__mocks__/fileMock.js"
+    }
+  },
+  "devDependencies": {
+    "identity-obj-proxy": "^3.0.0"
   }
 }

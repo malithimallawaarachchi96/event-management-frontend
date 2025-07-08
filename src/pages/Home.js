@@ -27,6 +27,7 @@ const Home = () => {
   const [showFilters, setShowFilters] = useState(true);
   const navigate = useNavigate();
 
+  // Get user id from JWT
   const token = getToken();
   const user = decodeToken(token);
   const userId = user?.userId;
@@ -98,6 +99,7 @@ const Home = () => {
   const [attLoading, setAttLoading] = useState({}); // { [eventId]: boolean }
   const [attMsg, setAttMsg] = useState({}); // { [eventId]: string }
   const [attError, setAttError] = useState({}); // { [eventId]: string }
+  const [deleteLoading, setDeleteLoading] = useState({}); // { [eventId]: boolean }
 
   const handleAttendance = async (eventId, status) => {
     setAttLoading(a => ({ ...a, [eventId]: true }));
@@ -114,6 +116,22 @@ const Home = () => {
       setAttError(e => ({ ...e, [eventId]: 'Failed to update attendance.' }));
     } finally {
       setAttLoading(a => ({ ...a, [eventId]: false }));
+    }
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    if (!window.confirm('Are you sure you want to delete this event?')) {
+      return;
+    }
+    setDeleteLoading(d => ({ ...d, [eventId]: true }));
+    try {
+      await api.delete(`/events/${eventId}`);
+      // Remove the event from the list
+      setEvents(events.filter(e => e.id !== eventId));
+    } catch (err) {
+      alert('Failed to delete event. Please try again.');
+    } finally {
+      setDeleteLoading(d => ({ ...d, [eventId]: false }));
     }
   };
 
@@ -237,6 +255,29 @@ const Home = () => {
                 {formatDate(event.startTime)} — {formatDate(event.endTime)}
               </div>
               <div className={styles.description}>{event.description}</div>
+              {/* Delete button for events user is hosting */}
+              {event.hostId === userId && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteEvent(event.id);
+                  }}
+                  disabled={deleteLoading[event.id]}
+                  style={{
+                    background: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.5rem',
+                    padding: '0.4rem 0.8rem',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    marginTop: '0.5rem',
+                    opacity: deleteLoading[event.id] ? 0.7 : 1,
+                  }}
+                >
+                  {deleteLoading[event.id] ? 'Deleting...' : 'Delete Event'}
+                </button>
+              )}
               {/* Attendance UI */}
               <div className={styles.attendanceBar}>
                 <span style={{ fontWeight: 500, color: '#6366f1', marginRight: 6 }}>Your RSVP:</span>
