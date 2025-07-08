@@ -1,31 +1,36 @@
 import React from 'react';
 
 const LoadingSpinner = ({ size = 'medium', text = 'Loading...' }) => {
-  const sizeClasses = {
-    small: 'w-4 h-4',
-    medium: 'w-8 h-8',
-    large: 'w-12 h-12'
-  };
+  const sizePx = size === 'small' ? 16 : size === 'large' ? 48 : 32;
 
   return (
-    <div className="flex flex-col items-center justify-center p-4">
-      <div 
-        className={`${sizeClasses[size]} border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin`}
+    <div style={{
+      minHeight: '100vh',
+      width: '100vw',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      zIndex: 9999,
+      background: 'rgba(255,255,255,0.85)'
+    }}>
+      <div
         style={{
-          width: size === 'small' ? '16px' : size === 'medium' ? '32px' : '48px',
-          height: size === 'small' ? '16px' : size === 'medium' ? '32px' : '48px',
-          border: '2px solid #d1d5db',
-          borderTop: '2px solid #2563eb',
+          width: sizePx,
+          height: sizePx,
+          border: '4px solid #d1d5db',
+          borderTop: '4px solid #6366f1',
           borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
+          animation: 'spin 0.7s linear infinite',
+          marginBottom: 16
         }}
       />
-      {text && <p className="mt-2 text-gray-600">{text}</p>}
+      {text && <p style={{ color: '#6366f1', fontWeight: 500, fontSize: 18 }}>{text}</p>}
       <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
